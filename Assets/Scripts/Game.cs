@@ -66,6 +66,9 @@ public class Game : MonoBehaviour
 
         Debug.Log("Game实例已创建");
 
+        // 初始化声音管理器
+        InitializeAudioManager();
+
         // 如果需要预加载
         if (preloadOnAwake)
         {
@@ -383,6 +386,23 @@ public class Game : MonoBehaviour
     {
         CurrentLoadInfo = info;
         OnLoadInfoChanged?.Invoke(info);
+    }
+
+    /// <summary>
+    /// 初始化声音管理器
+    /// </summary>
+    private void InitializeAudioManager()
+    {
+        // 确保AudioManager实例存在
+        var audioManager = AudioManager.Instance;
+        if (audioManager != null)
+        {
+            Debug.Log("声音管理器已初始化");
+        }
+        else
+        {
+            Debug.LogWarning("声音管理器初始化失败");
+        }
     }
 
     /// <summary>
