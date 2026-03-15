@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
+using Unity.Mathematics;
 
 public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IDragHandler {
     private Vector2 oriPos;
@@ -12,6 +13,7 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     public int correctCol;
     public int curRow;
     public int curCol;
+    private List<PuzzlePiece> neighbors = new List<PuzzlePiece>();
 
     public void Initialize(int row, int col, Vector2 pos, PuzzleManager manager) {
         correctRow = row;
@@ -20,6 +22,7 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         curRow = row;
         curCol = col;
         puzzleManager = manager;
+        neighbors = new List<PuzzlePiece>();
         rectTransform = GetComponent<RectTransform>();
     }
 
@@ -29,26 +32,34 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 
     public void OnPointerDown(PointerEventData eventData) {
         oriPos = rectTransform.anchoredPosition;
-        Debug.Log($"OnPointerDown: {oriPos}");
         RectTransform parentRect = rectTransform.parent as RectTransform;
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
             parentRect, eventData.position, canvas.worldCamera, out Vector2 mouseLocalPos)) {
             offset = mouseLocalPos - rectTransform.anchoredPosition;
-            Debug.Log($"OnPointerDown: {offset}");
+        }
+        neighbors.Clear();
+        GetNeighbors(neighbors);
+        if (neighbors.Contains(this)) {
+            neighbors.Remove(this);
         }
         transform.SetAsLastSibling();
+        for (int i = 0; i < neighbors.Count; i++) {
+            neighbors[i].transform.SetAsLastSibling();
+        }
     }
 
     public void OnPointerUp(PointerEventData eventData) {
         Vector2 currentPos = rectTransform.anchoredPosition;
         int targetCol = Mathf.RoundToInt(currentPos.x / rectTransform.sizeDelta.x);
         int targetRow = Mathf.RoundToInt(-currentPos.y / rectTransform.sizeDelta.y);
-        Debug.Log($"OnPointerUp: {currentPos}, {targetRow}, {targetCol}");
-        if (!puzzleManager.IsValidPosition(targetRow, targetCol) ||
-            (targetRow == curRow && targetCol == curCol)) {
+        if (!CanSwap(targetRow, targetCol)) {
             rectTransform.anchoredPosition = oriPos;
+            for (int i = 0; i < neighbors.Count; i++) {
+                neighbors[i].rectTransform.anchoredPosition = neighbors[i].oriPos;
+            }
             return;
         }
+        SwapNeighbors(targetRow, targetCol);
         SwapTo(targetRow, targetCol);
     }
 
@@ -58,8 +69,10 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
             parentRect, eventData.position, canvas.worldCamera, out Vector2 mouseLocalPos)) {
             Vector2 diff = mouseLocalPos - offset;
-            Debug.Log($"OnPointerDown: {mouseLocalPos}");
             MoveTo(diff-oriPos);
+            foreach (PuzzlePiece neighbor in neighbors) {
+                neighbor.MoveTo(diff-oriPos);
+            }
         }
     }
 
@@ -78,7 +91,89 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         puzzleManager.SwapTo(this, target);
     }
 
+    public void ForceSwapTo(int trow, int tcol) {
+        rectTransform.anchoredPosition = new Vector2(tcol * puzzleManager.pieceWidth, -trow * puzzleManager.pieceHeight);
+        oriPos = rectTransform.anchoredPosition;
+        curRow = trow;
+        curCol = tcol;
+        puzzleManager.puzzlePieces[curRow * puzzleManager.columns + curCol] = this;
+    }
+
     public void MoveTo(Vector2 diff) {
         rectTransform.anchoredPosition = diff + oriPos;
+    }
+
+    public bool ValidNeighbor(List<PuzzlePiece> allPieces, PuzzlePiece tar) {
+        if (tar == null || tar == this) return false;
+        return !allPieces.Contains(tar);
+    }
+
+    public void GetNeighbors(List<PuzzlePiece> allPieces) {
+        if (curRow > 0) {
+          PuzzlePiece up = puzzleManager.GetPieceAt(curRow - 1, curCol);
+          if (ValidNeighbor(allPieces, up) && up.correctCol == correctCol && up.correctRow == correctRow - 1) {
+            allPieces.Add(up);
+            up.GetNeighbors(allPieces);
+          }
+        }
+        if (curRow < puzzleManager.rows - 1) {
+          PuzzlePiece down = puzzleManager.GetPieceAt(curRow + 1, curCol);
+          if (ValidNeighbor(allPieces, down) && down.correctCol == correctCol && down.correctRow == correctRow + 1) {
+            allPieces.Add(down);
+            down.GetNeighbors(allPieces);
+          }
+        }
+        if (curCol > 0) {
+          PuzzlePiece left = puzzleManager.GetPieceAt(curRow, curCol - 1);
+          if (ValidNeighbor(allPieces, left) && left.correctCol == correctCol - 1 && left.correctRow == correctRow) {
+            allPieces.Add(left);
+            left.GetNeighbors(allPieces);
+          }
+        }
+        if (curCol < puzzleManager.columns - 1) {
+          PuzzlePiece right = puzzleManager.GetPieceAt(curRow, curCol + 1);
+          if (ValidNeighbor(allPieces, right) && right.correctCol == correctCol + 1 && right.correctRow == correctRow) {
+            allPieces.Add(right);
+            right.GetNeighbors(allPieces);
+          }
+        }
+    }
+
+    public bool CanSwap(int trow, int tcol) {
+        if (!puzzleManager.IsValidPosition(trow, tcol)) return false;
+        if (trow == curRow && tcol == curCol) return false;
+        for (int i = 0; i < neighbors.Count; i++) {
+            int nr = neighbors[i].curRow - curRow + trow;
+            int nc = neighbors[i].curCol - curCol + tcol;
+            if (nr < 0 || nr >= puzzleManager.rows || nc < 0 || nc >= puzzleManager.columns) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void SwapNeighbors(int trow, int tcol) {
+        List<PuzzlePiece> temp = new List<PuzzlePiece>();
+        for (int i = 0; i < neighbors.Count; i++) {
+            int nr = neighbors[i].curRow - curRow + trow;
+            int nc = neighbors[i].curCol - curCol + tcol;
+            Debug.Log($"SwapNeighbors-i: {neighbors[i].curRow}, {neighbors[i].curCol}");
+            Debug.Log($"SwapNeighbors-c: {curRow}, {curCol}");
+            Debug.Log($"SwapNeighbors-n: {nr}, {nc}");
+            PuzzlePiece target = puzzleManager.GetPieceAt(nr, nc);
+            /// 防止交换到邻居
+            if (neighbors.Contains(target) || target == this) {
+                temp.Add(neighbors[i]);
+                Debug.Log($"SwapStop");
+                continue;
+            }
+            neighbors[i].SwapTo(nr, nc);
+        }
+        /// 恢复交换前的邻居
+        for (int i = 0; i < temp.Count; i++) {
+            int nr = temp[i].curRow - curRow + trow;
+            int nc = temp[i].curCol - curCol + tcol;
+            temp[i].SwapTo(nr, nc);
+        }
     }
 }

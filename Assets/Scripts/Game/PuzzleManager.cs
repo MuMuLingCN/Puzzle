@@ -37,20 +37,29 @@ public class PuzzleManager : MonoBehaviour {
     [Header("拼图设置")]
     public PuzzleDifficulty difficulty = PuzzleDifficulty.Easy;
     public Transform puzzleContainer;
-    private int rows;
-    private int columns;
-    private List<PuzzlePiece> puzzlePieces = new List<PuzzlePiece>();
+    public GameObject setting;
+    public int rows;
+    public int columns;
+    public List<PuzzlePiece> puzzlePieces = new List<PuzzlePiece>();
     public Sprite originalImage;
-    private float pieceWidth;
-    private float pieceHeight;
+    public float pieceWidth;
+    public float pieceHeight;
     private RectTransform containerRect;
 
     private void Start() {
         InitializePuzzle();
+        Button settingButton = setting.GetComponent<Button>();
+        if (settingButton != null) {
+            settingButton.onClick.AddListener(ResetPuzzle);
+        }
     }
 
     public void InitializePuzzle() {
         SetDifficulty();
+        ResetPuzzle();
+    }
+
+    public void ResetPuzzle() {
         ClearPuzzle();
         CreatePuzzlePieces();
         ShufflePuzzle();
