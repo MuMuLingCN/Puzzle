@@ -197,7 +197,7 @@ public class Game : MonoBehaviour
     /// </summary>
     public IEnumerator LoadSceneAsync(string sceneName, LoadSceneMode mode = LoadSceneMode.Single)
     {
-        UpdateLoadInfo($"正在加载场景: {sceneName}");
+        UpdateLoadInfo($"正在加载场景: {sceneName} ");
 
         AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(sceneName, mode);
 
@@ -207,6 +207,8 @@ public class Game : MonoBehaviour
             UpdateLoadProgress(progress * 0.9f); // 场景加载占90%
             yield return null;
         }
+
+        Debug.Log($"场景 {sceneName} 加载完成");
 
         // 场景加载完成，激活场景
         if (mode == LoadSceneMode.Additive)
