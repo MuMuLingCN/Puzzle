@@ -2,38 +2,54 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
 
-public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IDragHandler
-{
-    private Vector2 originalPosition;
+public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IDragHandler {
+    private Vector2 oriPos;
     private RectTransform rectTransform;
     private Canvas canvas;
     private Vector2 offset;
-    private PuzzlePiece targetPiece;
+    private PuzzleManager puzzleManager;
+    public int correctRow;
+    public int correctCol;
+    public int curRow;
+    public int curCol;
+
+    public void Initialize(int row, int col, Vector2 pos, PuzzleManager manager) {
+        correctRow = row;
+        correctCol = col;
+        oriPos = pos;
+        curRow = row;
+        curCol = col;
+        puzzleManager = manager;
+        rectTransform = GetComponent<RectTransform>();
+    }
 
     private void Start() {
-        rectTransform = GetComponent<RectTransform>();
         canvas = GetComponentInParent<Canvas>();
     }
 
     public void OnPointerDown(PointerEventData eventData) {
-        originalPosition = rectTransform.anchoredPosition;
+        oriPos = rectTransform.anchoredPosition;
+        Debug.Log($"OnPointerDown: {oriPos}");
         RectTransform parentRect = rectTransform.parent as RectTransform;
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
             parentRect, eventData.position, canvas.worldCamera, out Vector2 mouseLocalPos)) {
             offset = mouseLocalPos - rectTransform.anchoredPosition;
+            Debug.Log($"OnPointerDown: {offset}");
         }
         transform.SetAsLastSibling();
     }
 
     public void OnPointerUp(PointerEventData eventData) {
-        if (targetPiece != null) {
-            Vector2 targetPosition = targetPiece.rectTransform.anchoredPosition;
-            targetPiece.rectTransform.anchoredPosition = originalPosition;
-            rectTransform.anchoredPosition = targetPosition;
-            targetPiece = null;
-        } else {
-            rectTransform.anchoredPosition = originalPosition;
+        Vector2 currentPos = rectTransform.anchoredPosition;
+        int targetCol = Mathf.RoundToInt(currentPos.x / rectTransform.sizeDelta.x);
+        int targetRow = Mathf.RoundToInt(-currentPos.y / rectTransform.sizeDelta.y);
+        Debug.Log($"OnPointerUp: {currentPos}, {targetRow}, {targetCol}");
+        if (!puzzleManager.IsValidPosition(targetRow, targetCol) ||
+            (targetRow == curRow && targetCol == curCol)) {
+            rectTransform.anchoredPosition = oriPos;
+            return;
         }
+        SwapTo(targetRow, targetCol);
     }
 
     public void OnDrag(PointerEventData eventData) {
@@ -41,20 +57,28 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         RectTransform parentRect = rectTransform.parent as RectTransform;
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
             parentRect, eventData.position, canvas.worldCamera, out Vector2 mouseLocalPos)) {
-            rectTransform.anchoredPosition = mouseLocalPos - offset;
+            Vector2 diff = mouseLocalPos - offset;
+            Debug.Log($"OnPointerDown: {mouseLocalPos}");
+            MoveTo(diff-oriPos);
         }
-        targetPiece = FindTargetPiece(eventData.position);
     }
 
-    private PuzzlePiece FindTargetPiece(Vector2 screenPosition) {
-        PuzzlePiece[] allPieces = GetComponentsInParent<PuzzleManager>()[0].GetComponentsInChildren<PuzzlePiece>();
-        foreach (PuzzlePiece piece in allPieces) {
-            if (piece == this) continue;
-            if (RectTransformUtility.RectangleContainsScreenPoint(
-                piece.rectTransform, screenPosition, canvas.worldCamera)) {
-                return piece;
-            }
-        }
-        return null;
+    public void SwapTo(int targetRow, int targetCol) {
+        PuzzlePiece target = puzzleManager.GetPieceAt(targetRow, targetCol);
+        if (target == null || target == this) return;
+        Vector2 temp = target.oriPos;
+        target.rectTransform.anchoredPosition = oriPos;
+        target.oriPos = oriPos;
+        target.curRow = curRow;
+        target.curCol = curCol;
+        rectTransform.anchoredPosition = temp;
+        oriPos = temp;
+        curRow = targetRow;
+        curCol = targetCol;
+        puzzleManager.SwapTo(this, target);
+    }
+
+    public void MoveTo(Vector2 diff) {
+        rectTransform.anchoredPosition = diff + oriPos;
     }
 }
