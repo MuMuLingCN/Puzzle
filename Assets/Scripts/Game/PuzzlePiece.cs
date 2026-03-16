@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
 using Unity.Mathematics;
+using System;
 
 public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IDragHandler {
     private Vector2 oriPos;
@@ -14,6 +15,7 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     public int curRow;
     public int curCol;
     private List<PuzzlePiece> neighbors = new List<PuzzlePiece>();
+    private bool isAnimating = false;
 
     public void Initialize(int row, int col, Vector2 pos, PuzzleManager manager) {
         correctRow = row;
@@ -31,6 +33,7 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     }
 
     public void OnPointerDown(PointerEventData eventData) {
+        if (isAnimating) return;
         oriPos = rectTransform.anchoredPosition;
         RectTransform parentRect = rectTransform.parent as RectTransform;
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
@@ -49,13 +52,14 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     }
 
     public void OnPointerUp(PointerEventData eventData) {
+        if (isAnimating) return;
         Vector2 currentPos = rectTransform.anchoredPosition;
         int targetCol = Mathf.RoundToInt(currentPos.x / rectTransform.sizeDelta.x);
         int targetRow = Mathf.RoundToInt(-currentPos.y / rectTransform.sizeDelta.y);
         if (!CanSwap(targetRow, targetCol)) {
-            rectTransform.anchoredPosition = oriPos;
             for (int i = 0; i < neighbors.Count; i++) {
-                neighbors[i].rectTransform.anchoredPosition = neighbors[i].oriPos;
+                // neighbors[i].rectTransform.anchoredPosition = neighbors[i].oriPos;
+                StartCoroutine(neighbors[i].AnimateSwap(neighbors[i].oriPos,neighbors[i].rectTransform.anchoredPosition));
             }
             return;
         }
@@ -63,7 +67,7 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     }
 
     public void OnDrag(PointerEventData eventData) {
-        if (rectTransform == null || canvas == null) return;
+        if (isAnimating || rectTransform == null || canvas == null) return;
         RectTransform parentRect = rectTransform.parent as RectTransform;
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
             parentRect, eventData.position, canvas.worldCamera, out Vector2 mouseLocalPos)) {
@@ -78,16 +82,41 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     public void SwapTo(int targetRow, int targetCol) {
         PuzzlePiece target = puzzleManager.GetPieceAt(targetRow, targetCol);
         if (target == null || target == this) return;
-        Vector2 temp = target.oriPos;
-        target.rectTransform.anchoredPosition = oriPos;
-        target.oriPos = oriPos;
+        
+        Vector2 myStartPos = rectTransform.anchoredPosition;
+        Vector2 targetStartPos = target.rectTransform.anchoredPosition;
+        Vector2 myTargetPos = target.oriPos;
+        Vector2 targetTargetPos = oriPos;
+        
+        StartCoroutine(AnimateSwap(myTargetPos, myStartPos));
+        StartCoroutine(target.AnimateSwap(targetTargetPos, targetStartPos));
+        
+        target.oriPos = targetTargetPos;
         target.curRow = curRow;
         target.curCol = curCol;
-        rectTransform.anchoredPosition = temp;
-        oriPos = temp;
+        oriPos = myTargetPos;
         curRow = targetRow;
         curCol = targetCol;
         puzzleManager.SwapTo(this, target);
+    }
+
+    private System.Collections.IEnumerator AnimateSwap(Vector2 tarPos, Vector2 starPos) {
+      isAnimating = true;
+      float duration = 0.3f;
+      float elapsed = 0f;
+      while (elapsed < duration) {
+          float t = elapsed / duration;
+          t = EaseOutCubic(t);
+          rectTransform.anchoredPosition = Vector2.Lerp(starPos, tarPos, t);
+          elapsed += Time.deltaTime;
+          yield return null;
+      }
+      rectTransform.anchoredPosition = tarPos;
+      isAnimating = false;
+    }
+
+    private float EaseOutCubic(float t) {
+        return 1f - Mathf.Pow(1f - t, 3f);
     }
 
     public void ForceSwapTo(int trow, int tcol) {
