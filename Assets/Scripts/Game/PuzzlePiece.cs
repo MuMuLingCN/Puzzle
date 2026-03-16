@@ -58,7 +58,6 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         int targetRow = Mathf.RoundToInt(-currentPos.y / rectTransform.sizeDelta.y);
         if (!CanSwap(targetRow, targetCol)) {
             for (int i = 0; i < neighbors.Count; i++) {
-                // neighbors[i].rectTransform.anchoredPosition = neighbors[i].oriPos;
                 StartCoroutine(neighbors[i].AnimateSwap(neighbors[i].oriPos,neighbors[i].rectTransform.anchoredPosition));
             }
             return;
