@@ -49,9 +49,7 @@ public class PuzzleManager : MonoBehaviour {
     private void Start() {
         InitializePuzzle();
         Button settingButton = setting.GetComponent<Button>();
-        if (settingButton != null) {
-            settingButton.onClick.AddListener(ResetPuzzle);
-        }
+        settingButton.onClick.AddListener(ResetPuzzle);
     }
 
     public void InitializePuzzle() {
