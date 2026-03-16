@@ -39,9 +39,9 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         }
         neighbors.Clear();
         GetNeighbors(neighbors);
-        if (neighbors.Contains(this)) {
-            neighbors.Remove(this);
-        }
+        if (!neighbors.Contains(this)) neighbors.Add(this);
+        Debug.Log($"邻居数量: {neighbors.Count}");
+        neighbors.Sort((a, b) => (a.curRow*puzzleManager.columns+a.curCol).CompareTo(b.curRow*puzzleManager.columns+b.curCol));
         transform.SetAsLastSibling();
         for (int i = 0; i < neighbors.Count; i++) {
             neighbors[i].transform.SetAsLastSibling();
@@ -60,7 +60,6 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             return;
         }
         SwapNeighbors(targetRow, targetCol);
-        SwapTo(targetRow, targetCol);
     }
 
     public void OnDrag(PointerEventData eventData) {
@@ -104,7 +103,6 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     }
 
     public bool ValidNeighbor(List<PuzzlePiece> allPieces, PuzzlePiece tar) {
-        if (tar == null || tar == this) return false;
         return !allPieces.Contains(tar);
     }
 
@@ -153,26 +151,15 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     }
 
     public void SwapNeighbors(int trow, int tcol) {
-        List<PuzzlePiece> temp = new List<PuzzlePiece>();
-        for (int i = 0; i < neighbors.Count; i++) {
-            int nr = neighbors[i].curRow - curRow + trow;
-            int nc = neighbors[i].curCol - curCol + tcol;
-            Debug.Log($"SwapNeighbors-i: {neighbors[i].curRow}, {neighbors[i].curCol}");
-            Debug.Log($"SwapNeighbors-c: {curRow}, {curCol}");
-            Debug.Log($"SwapNeighbors-n: {nr}, {nc}");
-            PuzzlePiece target = puzzleManager.GetPieceAt(nr, nc);
-            /// 防止交换到邻居
-            if (neighbors.Contains(target) || target == this) {
-                temp.Add(neighbors[i]);
-                Debug.Log($"SwapStop");
-                continue;
-            }
-            neighbors[i].SwapTo(nr, nc);
+        List<PuzzlePiece> temp = new List<PuzzlePiece>(neighbors);
+        int offsetRow = trow - curRow;
+        int offsetCol = tcol - curCol;
+        if (trow > curRow || (trow == curRow && tcol > curCol)) {
+            temp.Reverse();
         }
-        /// 恢复交换前的邻居
         for (int i = 0; i < temp.Count; i++) {
-            int nr = temp[i].curRow - curRow + trow;
-            int nc = temp[i].curCol - curCol + tcol;
+            int nr = temp[i].curRow + offsetRow;
+            int nc = temp[i].curCol + offsetCol;
             temp[i].SwapTo(nr, nc);
         }
     }
