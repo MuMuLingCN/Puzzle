@@ -218,8 +218,8 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     }
     
     private System.Collections.IEnumerator PlayScaleAnimation(List<PuzzlePiece> pieces) {
-        float scaleUpDuration = 0.2f;
-        float scaleDownDuration = 0.2f;
+        float scaleUpDuration = 0.15f;
+        float scaleDownDuration = 0.15f;
         float maxScale = 1.02f;
         
         foreach (PuzzlePiece piece in pieces) {
