@@ -2,9 +2,23 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace UI
 {
+    /// <summary>
+    /// Switch状态变化监听器接口
+    /// </summary>
+    public interface ISwitchListener
+    {
+        /// <summary>
+        /// 当Switch状态改变时调用
+        /// </summary>
+        /// <param name="switchComponent">触发事件的Switch组件</param>
+        /// <param name="isOn">新的开关状态</param>
+        void OnSwitchStateChanged(Switch switchComponent, bool isOn);
+    }
+
     /// <summary>
     /// iOS风格的Switch开关组件
     /// 具有丝滑的动画过渡效果
@@ -43,6 +57,9 @@ namespace UI
         private float leftKnobPosition; // 左边Knob的X位置
         private float rightKnobPosition; // 右边Knob的X位置
 
+        // 监听器列
+        private List<ISwitchListener> listeners = new List<ISwitchListener>();
+
         // 事件
         public System.Action<bool> OnValueChanged;
 
@@ -58,6 +75,7 @@ namespace UI
                 {
                     isOn = value;
                     UpdateSwitchState();
+                    NotifyStateChanged();
                     OnValueChanged?.Invoke(isOn);
                 }
             }
@@ -365,6 +383,62 @@ namespace UI
         public void SetAnimationDuration(float duration)
         {
             animationDuration = Mathf.Max(0.01f, duration);
+        }
+
+        /// <summary>
+        /// 添加状态变化监听器
+        /// </summary>
+        /// <param name="listener">要添加的监听器</param>
+        public void AddListener(ISwitchListener listener)
+        {
+            if (listener != null && !listeners.Contains(listener))
+            {
+                listeners.Add(listener);
+            }
+        }
+
+        /// <summary>
+        /// 移除状态变化监听器
+        /// </summary>
+        /// <param name="listener">要移除的监听器</param>
+        public void RemoveListener(ISwitchListener listener)
+        {
+            if (listener != null)
+            {
+                listeners.Remove(listener);
+            }
+        }
+
+        /// <summary>
+        /// 移除所有监听器
+        /// </summary>
+        public void RemoveAllListeners()
+        {
+            listeners.Clear();
+        }
+
+        /// <summary>
+        /// 获取监听器数量
+        /// </summary>
+        public int ListenerCount
+        {
+            get { return listeners.Count; }
+        }
+
+        /// <summary>
+        /// 通知所有监听器状态已改变
+        /// </summary>
+        private void NotifyStateChanged()
+        {
+            // 使用副本遍历，避免在遍历时修改列表
+            var listenersCopy = new List<ISwitchListener>(listeners);
+            foreach (var listener in listenersCopy)
+            {
+                if (listener != null)
+                {
+                    listener.OnSwitchStateChanged(this, isOn);
+                }
+            }
         }
 
         /// <summary>
