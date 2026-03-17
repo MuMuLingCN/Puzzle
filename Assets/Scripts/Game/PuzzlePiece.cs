@@ -42,10 +42,7 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         }
         neighbors.Clear();
         GetNeighbors(neighbors);
-        if (!neighbors.Contains(this)) neighbors.Add(this);
-        Debug.Log($"邻居数量: {neighbors.Count}");
         neighbors.Sort((a, b) => (a.curRow*puzzleManager.columns+a.curCol).CompareTo(b.curRow*puzzleManager.columns+b.curCol));
-        transform.SetAsLastSibling();
         for (int i = 0; i < neighbors.Count; i++) {
             neighbors[i].transform.SetAsLastSibling();
         }
@@ -78,9 +75,11 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         }
     }
 
-    public void SwapTo(int targetRow, int targetCol) {
+    public PuzzlePiece SwapTo(int targetRow, int targetCol) {
         PuzzlePiece target = puzzleManager.GetPieceAt(targetRow, targetCol);
-        if (target == null || target == this) return;
+        if (target == null || target == this) return null;
+        target.neighbors.Clear();
+        GetNeighbors(target.neighbors);
         
         Vector2 myStartPos = rectTransform.anchoredPosition;
         Vector2 targetStartPos = target.rectTransform.anchoredPosition;
@@ -97,6 +96,7 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         curRow = targetRow;
         curCol = targetCol;
         puzzleManager.SwapTo(this, target);
+        return target;
     }
 
     private System.Collections.IEnumerator AnimateSwap(Vector2 tarPos, Vector2 starPos) {
@@ -163,6 +163,7 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             right.GetNeighbors(allPieces);
           }
         }
+        if (!allPieces.Contains(this)) allPieces.Add(this);
     }
 
     public bool CanSwap(int trow, int tcol) {
@@ -180,6 +181,7 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 
     public void SwapNeighbors(int trow, int tcol) {
         List<PuzzlePiece> temp = new List<PuzzlePiece>(neighbors);
+        List<PuzzlePiece> all = new List<PuzzlePiece>(neighbors);
         int offsetRow = trow - curRow;
         int offsetCol = tcol - curCol;
         if (trow > curRow || (trow == curRow && tcol > curCol)) {
@@ -188,7 +190,100 @@ public class PuzzlePiece : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         for (int i = 0; i < temp.Count; i++) {
             int nr = temp[i].curRow + offsetRow;
             int nc = temp[i].curCol + offsetCol;
-            temp[i].SwapTo(nr, nc);
+            PuzzlePiece target = temp[i].SwapTo(nr, nc);
+            if (target != null && !all.Contains(target))  all.Add(target);
         }
+        /// 检查并动画连接
+        StartCoroutine(CheckAndAnimateConnection(all));
+    }
+    
+    private System.Collections.IEnumerator CheckAndAnimateConnection(List<PuzzlePiece> changedPieces) {
+        yield return new WaitForSeconds(0.4f);
+        List<PuzzlePiece> used = new List<PuzzlePiece>();
+        List<PuzzlePiece> connectedGroups = new List<PuzzlePiece>();
+        Debug.Log($"检查连接: 改变的块数量: {changedPieces.Count}");
+        for (int i = 0; i < changedPieces.Count; i++) {
+            PuzzlePiece piece = changedPieces[i];
+            if (used.Contains(piece)) continue;
+            used.Add(piece);
+            List<PuzzlePiece> connected = new List<PuzzlePiece>();
+            piece.GetNeighbors(connected);
+            used.AddRange(connected);
+            Debug.Log($"检查连接: 邻居数量: {piece.neighbors.Count}, 连接数量: {connected.Count}");
+            if (piece.neighbors.Count != connected.Count && connected.Count > 1) {
+                connectedGroups.AddRange(connected);
+            }
+        }
+        StartCoroutine(PlayScaleAnimation(connectedGroups));
+    }
+    
+    private System.Collections.IEnumerator PlayScaleAnimation(List<PuzzlePiece> pieces) {
+        float scaleUpDuration = 0.2f;
+        float scaleDownDuration = 0.2f;
+        float maxScale = 1.02f;
+        
+        foreach (PuzzlePiece piece in pieces) {
+            piece.transform.SetAsLastSibling();
+            piece.isAnimating = true;
+        }
+        
+        Vector2 centerPos = Vector2.zero;
+        foreach (PuzzlePiece piece in pieces) {
+            centerPos += piece.rectTransform.anchoredPosition;
+        }
+        centerPos /= pieces.Count;
+        
+        Vector2[] originalOffsets = new Vector2[pieces.Count];
+        for (int i = 0; i < pieces.Count; i++) {
+            originalOffsets[i] = pieces[i].rectTransform.anchoredPosition - centerPos;
+        }
+        
+        float elapsed = 0f;
+        while (elapsed < scaleUpDuration) {
+            float t = elapsed / scaleUpDuration;
+            t = EaseOutBack(t);
+            float scale = 1f + (maxScale - 1f) * t;
+            
+            for (int i = 0; i < pieces.Count; i++) {
+                pieces[i].rectTransform.anchoredPosition = centerPos + originalOffsets[i] * scale;
+                pieces[i].rectTransform.localScale = Vector3.one * scale;
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        
+        for (int i = 0; i < pieces.Count; i++) {
+            pieces[i].rectTransform.anchoredPosition = centerPos + originalOffsets[i] * maxScale;
+            pieces[i].rectTransform.localScale = Vector3.one * maxScale;
+        }
+        
+        elapsed = 0f;
+        while (elapsed < scaleDownDuration) {
+            float t = elapsed / scaleDownDuration;
+            t = EaseOutCubic(t);
+            float scale = maxScale - (maxScale - 1f) * t;
+            
+            for (int i = 0; i < pieces.Count; i++) {
+                pieces[i].rectTransform.anchoredPosition = centerPos + originalOffsets[i] * scale;
+                pieces[i].rectTransform.localScale = Vector3.one * scale;
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        
+        for (int i = 0; i < pieces.Count; i++) {
+            pieces[i].rectTransform.anchoredPosition = centerPos + originalOffsets[i];
+            pieces[i].rectTransform.localScale = Vector3.one;
+        }
+        
+        foreach (PuzzlePiece piece in pieces) {
+            piece.isAnimating = false;
+        }
+    }
+    
+    private float EaseOutBack(float t) {
+        float c1 = 1.70158f;
+        float c3 = c1 + 1f;
+        return 1f + c3 * Mathf.Pow(t - 1f, 3f) + c1 * Mathf.Pow(t - 1f, 2f);
     }
 }
